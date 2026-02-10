@@ -11,43 +11,35 @@ class ConflictDetector:
         return not (date1_end < date2_start or date2_end < date1_start)
     
     def detect_pilot_double_booking(self):
-        """Detect pilots assigned to overlapping projects"""
+        """Detect pilots on leave but assigned, or other booking conflicts"""
         conflicts = []
         pilots = self.data_loader.get_pilots()
         missions = self.data_loader.get_missions()
         
         for idx, pilot in pilots.iterrows():
-            if pilot['current_assignment'] == '–':
-                continue
+            # Check if pilot is On Leave but has an assignment
+            if pilot['status'] == 'On Leave' and pilot['current_assignment'] != '–':
+                conflicts.append({
+                    'type': 'Pilot On Leave but Assigned',
+                    'severity': 'CRITICAL',
+                    'pilot_id': pilot['pilot_id'],
+                    'pilot_name': pilot['name'],
+                    'pilot_status': pilot['status'],
+                    'assignment': pilot['current_assignment'],
+                    'issue': f"{pilot['name']} is On Leave but assigned to {pilot['current_assignment']}"
+                })
             
-            current_mission = missions[missions['project_id'] == pilot['current_assignment']]
-            if current_mission.empty:
-                continue
-            
-            current_mission = current_mission.iloc[0]
-            
-            # Check for overlaps with other assignments
-            for idx2, other_pilot in pilots.iterrows():
-                if other_pilot['pilot_id'] == pilot['pilot_id'] or other_pilot['current_assignment'] == '–':
-                    continue
-                
-                other_mission = missions[missions['project_id'] == other_pilot['current_assignment']]
-                if other_mission.empty:
-                    continue
-                
-                other_mission = other_mission.iloc[0]
-                
-                # This check is simplified since a pilot can't have 2 assignments in our current data
-                # But we flag if pilot is assigned while on leave
-                if pilot['status'] == 'On Leave' and pilot['current_assignment'] != '–':
-                    conflicts.append({
-                        'type': 'Pilot On Leave but Assigned',
-                        'severity': 'HIGH',
-                        'pilot_id': pilot['pilot_id'],
-                        'pilot_name': pilot['name'],
-                        'assignment': pilot['current_assignment'],
-                        'issue': f"{pilot['name']} is On Leave but assigned to {pilot['current_assignment']}"
-                    })
+            # Check if pilot is Unavailable but has an assignment
+            if pilot['status'] == 'Unavailable' and pilot['current_assignment'] != '–':
+                conflicts.append({
+                    'type': 'Pilot Unavailable but Assigned',
+                    'severity': 'HIGH',
+                    'pilot_id': pilot['pilot_id'],
+                    'pilot_name': pilot['name'],
+                    'pilot_status': pilot['status'],
+                    'assignment': pilot['current_assignment'],
+                    'issue': f"{pilot['name']} is Unavailable but assigned to {pilot['current_assignment']}"
+                })
         
         return conflicts
     
@@ -199,12 +191,47 @@ class ConflictDetector:
         all_conflicts.extend(self.detect_certification_mismatch())
         all_conflicts.extend(self.detect_location_mismatch())
         all_conflicts.extend(self.detect_maintenance_conflict())
+        all_conflicts.extend(self.detect_urgent_mission_conflicts())
+        
+        # Remove duplicates based on issue
+        seen_issues = set()
+        unique_conflicts = []
+        for conflict in all_conflicts:
+            if conflict['issue'] not in seen_issues:
+                seen_issues.add(conflict['issue'])
+                unique_conflicts.append(conflict)
         
         # Sort by severity
         severity_order = {'CRITICAL': 0, 'HIGH': 1, 'MEDIUM': 2, 'LOW': 3}
-        all_conflicts.sort(key=lambda x: severity_order.get(x['severity'], 4))
+        unique_conflicts.sort(key=lambda x: severity_order.get(x['severity'], 4))
         
-        return all_conflicts
+        return unique_conflicts
+    
+    def detect_urgent_mission_conflicts(self):
+        """Detect urgent/high priority missions with issues"""
+        conflicts = []
+        missions = self.data_loader.get_missions()
+        pilots = self.data_loader.get_pilots()
+        
+        for idx, mission in missions.iterrows():
+            if mission['priority'] in ['Urgent', 'High']:
+                # Check if any pilot assigned to this mission is on leave
+                assigned_pilots = pilots[pilots['current_assignment'] == mission['project_id']]
+                
+                for _, pilot in assigned_pilots.iterrows():
+                    if pilot['status'] == 'On Leave':
+                        conflicts.append({
+                            'type': 'Urgent Mission - Pilot On Leave',
+                            'severity': 'CRITICAL',
+                            'pilot_id': pilot['pilot_id'],
+                            'pilot_name': pilot['name'],
+                            'pilot_status': pilot['status'],
+                            'assignment': mission['project_id'],
+                            'priority': mission['priority'],
+                            'issue': f"URGENT: {pilot['name']} is On Leave but assigned to {mission['priority']} priority mission {mission['project_id']}"
+                        })
+        
+        return conflicts
     
     def get_conflicts_summary(self):
         """Get summary of conflicts"""
