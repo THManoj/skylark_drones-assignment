@@ -232,7 +232,11 @@ def show_roster():
                 result = st.session_state.roster_manager.mark_pilot_on_leave(pilot_id, available_from)
                 if result['success']:
                     st.session_state.data_loader.save_pilots()
-                    st.success(result['message'])
+                    if result.get('has_conflict'):
+                        st.warning(result['message'])
+                        st.info("👉 Go to **Conflicts → Urgent Reassignments** to auto-reassign")
+                    else:
+                        st.success(result['message'])
                 else:
                     st.error(result['message'])
         

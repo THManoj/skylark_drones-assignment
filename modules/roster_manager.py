@@ -111,11 +111,26 @@ class RosterManager:
         return {'success': False, 'message': f'Pilot {pilot_id} not found'}
     
     def mark_pilot_on_leave(self, pilot_id, available_from_date):
-        """Mark pilot as on leave"""
-        success = self.data_loader.update_pilot_status(pilot_id, 'On Leave', '–', available_from_date)
+        """Mark pilot as on leave - keeps assignment to trigger conflict detection"""
+        pilot = self.data_loader.get_pilot_by_id(pilot_id)
+        if pilot is None:
+            return {'success': False, 'message': f'Pilot {pilot_id} not found'}
+        
+        current_assignment = pilot['current_assignment']
+        
+        # Keep the current assignment so conflict is detected
+        success = self.data_loader.update_pilot_status(pilot_id, 'On Leave', current_assignment, available_from_date)
+        
         if success:
+            if current_assignment != '–':
+                return {
+                    'success': True, 
+                    'message': f'⚠️ Pilot {pilot_id} marked on leave. CONFLICT: Still assigned to {current_assignment} - please reassign!',
+                    'has_conflict': True,
+                    'assignment': current_assignment
+                }
             return {'success': True, 'message': f'Pilot {pilot_id} marked on leave'}
-        return {'success': False, 'message': f'Pilot {pilot_id} not found'}
+        return {'success': False, 'message': f'Failed to update pilot {pilot_id}'}
     
     def mark_pilot_available(self, pilot_id):
         """Mark pilot as available"""
