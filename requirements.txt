@@ -1,0 +1,9 @@
+streamlit
+pandas
+groq
+gspread
+google-auth-oauthlib
+google-auth
+python-dateutil
+
+

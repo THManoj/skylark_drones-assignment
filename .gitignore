@@ -1,0 +1,12 @@
+node_modules/
+__pycache__/
+*.pyc
+.env
+.DS_Store
+.git/
+.venv/
+venv/
+
+# Exclude markdown files and notes
+*.md
+important.txt
