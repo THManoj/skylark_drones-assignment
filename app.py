@@ -59,37 +59,43 @@ SPREADSHEET_ID = get_secret('GOOGLE_SHEETS_ID', '')
 
 # Initialize session state
 if 'data_loader' not in st.session_state:
-    sheets_sync = None
-    
-    # Try to set up Google Sheets if enabled
-    if USE_GOOGLE_SHEETS and GOOGLE_SHEETS_CREDS and SPREADSHEET_ID:
-        try:
-            sheets_sync = GoogleSheetsSync(GOOGLE_SHEETS_CREDS)
-            if sheets_sync.open_spreadsheet(SPREADSHEET_ID):
-                st.session_state.sheets_sync = sheets_sync
-                st.session_state.data_loader = CloudDataLoader(use_sheets=True, sheets_sync=sheets_sync)
-                st.session_state.using_sheets = True
-            else:
-                raise Exception("Could not open spreadsheet")
-        except Exception as e:
-            print(f"Google Sheets setup failed: {e}, falling back to CSV")
+    try:
+        sheets_sync = None
+        
+        # Try to set up Google Sheets if enabled
+        if USE_GOOGLE_SHEETS and GOOGLE_SHEETS_CREDS and SPREADSHEET_ID:
+            try:
+                sheets_sync = GoogleSheetsSync(GOOGLE_SHEETS_CREDS)
+                if sheets_sync.open_spreadsheet(SPREADSHEET_ID):
+                    st.session_state.sheets_sync = sheets_sync
+                    st.session_state.data_loader = CloudDataLoader(use_sheets=True, sheets_sync=sheets_sync)
+                    st.session_state.using_sheets = True
+                else:
+                    raise Exception("Could not open spreadsheet")
+            except Exception as e:
+                st.warning(f"Google Sheets setup failed: {e}, falling back to CSV")
+                st.session_state.data_loader = DataLoader()
+                st.session_state.using_sheets = False
+        else:
+            # Local development - use CSV files
             st.session_state.data_loader = DataLoader()
+            st.session_state.sheets_sync = None
             st.session_state.using_sheets = False
-    else:
-        # Local development - use CSV files
-        st.session_state.data_loader = DataLoader()
-        st.session_state.sheets_sync = None
-        st.session_state.using_sheets = False
-    
-    st.session_state.roster_manager = RosterManager(st.session_state.data_loader)
-    st.session_state.drone_inventory = DroneInventory(st.session_state.data_loader)
-    st.session_state.assignment_tracker = AssignmentTracker(
-        st.session_state.data_loader,
-        st.session_state.roster_manager,
-        st.session_state.drone_inventory
-    )
-    st.session_state.conflict_detector = ConflictDetector(st.session_state.data_loader)
-    st.session_state.llm_handler = LLMHandler()
+        
+        st.session_state.roster_manager = RosterManager(st.session_state.data_loader)
+        st.session_state.drone_inventory = DroneInventory(st.session_state.data_loader)
+        st.session_state.assignment_tracker = AssignmentTracker(
+            st.session_state.data_loader,
+            st.session_state.roster_manager,
+            st.session_state.drone_inventory
+        )
+        st.session_state.conflict_detector = ConflictDetector(st.session_state.data_loader)
+        st.session_state.llm_handler = LLMHandler()
+        st.session_state.init_success = True
+    except Exception as e:
+        st.error(f"Failed to initialize app: {e}")
+        st.session_state.init_success = False
+        st.stop()
 
 # Sidebar
 with st.sidebar:
