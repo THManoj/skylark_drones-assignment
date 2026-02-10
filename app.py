@@ -13,6 +13,18 @@ from modules.conflict_detector import ConflictDetector
 from utils.llm_handler import LLMHandler
 from utils.sheets_sync import GoogleSheetsSync
 
+# Helper function to fix datetime columns for display
+def fix_df_for_display(df):
+    """Convert datetime columns to strings for Streamlit display"""
+    df = df.copy()
+    for col in df.columns:
+        if df[col].dtype == 'datetime64[ns]' or 'date' in col.lower():
+            try:
+                df[col] = df[col].astype(str)
+            except:
+                pass
+    return df
+
 # Page configuration
 st.set_page_config(
     page_title="Skylark Drones - Operations Coordinator",
@@ -158,7 +170,7 @@ def show_roster():
     with tab1:
         st.subheader("All Pilots")
         pilots = st.session_state.data_loader.get_pilots()
-        st.dataframe(pilots, use_container_width=True)
+        st.dataframe(fix_df_for_display(pilots), use_container_width=True)
     
     with tab2:
         st.subheader("Find Pilots by Criteria")
@@ -169,25 +181,25 @@ def show_roster():
             skills = ['Mapping', 'Inspection', 'Survey', 'Thermal']
             selected_skill = st.selectbox("Select Skill", skills)
             results = st.session_state.roster_manager.get_pilots_by_skill(selected_skill)
-            st.dataframe(results, use_container_width=True)
+            st.dataframe(fix_df_for_display(results), use_container_width=True)
         
         elif search_type == "Certification":
             certs = ['DGCA', 'Night Ops']
             selected_cert = st.selectbox("Select Certification", certs)
             results = st.session_state.roster_manager.get_pilots_by_certification(selected_cert)
-            st.dataframe(results, use_container_width=True)
+            st.dataframe(fix_df_for_display(results), use_container_width=True)
         
         elif search_type == "Location":
             locations = pilots['location'].unique()
             selected_location = st.selectbox("Select Location", locations)
             results = st.session_state.roster_manager.get_pilots_by_location(selected_location)
-            st.dataframe(results, use_container_width=True)
+            st.dataframe(fix_df_for_display(results), use_container_width=True)
         
         elif search_type == "Status":
             statuses = pilots['status'].unique()
             selected_status = st.selectbox("Select Status", statuses)
             results = st.session_state.roster_manager.get_pilots_by_status(selected_status)
-            st.dataframe(results, use_container_width=True)
+            st.dataframe(fix_df_for_display(results), use_container_width=True)
     
     with tab3:
         st.subheader("Update Pilot Status")
@@ -244,7 +256,7 @@ def show_inventory():
     with tab1:
         st.subheader("All Drones")
         drones = st.session_state.data_loader.get_drones()
-        st.dataframe(drones, use_container_width=True)
+        st.dataframe(fix_df_for_display(drones), use_container_width=True)
     
     with tab2:
         st.subheader("Find Drones by Criteria")
@@ -255,27 +267,27 @@ def show_inventory():
             capabilities = ['LiDAR', 'RGB', 'Thermal']
             selected_cap = st.selectbox("Select Capability", capabilities)
             results = st.session_state.drone_inventory.get_drones_by_capability(selected_cap)
-            st.dataframe(results, use_container_width=True)
+            st.dataframe(fix_df_for_display(results), use_container_width=True)
         
         elif search_type == "Location":
             drones = st.session_state.data_loader.get_drones()
             locations = drones['location'].unique()
             selected_location = st.selectbox("Select Location", locations)
             results = st.session_state.drone_inventory.get_drones_by_location(selected_location)
-            st.dataframe(results, use_container_width=True)
+            st.dataframe(fix_df_for_display(results), use_container_width=True)
         
         elif search_type == "Status":
             drones = st.session_state.data_loader.get_drones()
             statuses = drones['status'].unique()
             selected_status = st.selectbox("Select Status", statuses)
             results = st.session_state.drone_inventory.get_drones_by_status(selected_status)
-            st.dataframe(results, use_container_width=True)
+            st.dataframe(fix_df_for_display(results), use_container_width=True)
         
         elif search_type == "Maintenance Due":
             maintenance = st.session_state.drone_inventory.get_maintenance_due_soon(30)
             if maintenance:
                 df = pd.DataFrame(maintenance)
-                st.dataframe(df, use_container_width=True)
+                st.dataframe(fix_df_for_display(df), use_container_width=True)
             else:
                 st.info("No maintenance due in next 30 days")
     
@@ -326,7 +338,7 @@ def show_assignments():
         assignments = st.session_state.assignment_tracker.get_active_assignments()
         if assignments:
             df = pd.DataFrame(assignments)
-            st.dataframe(df, use_container_width=True)
+            st.dataframe(fix_df_for_display(df), use_container_width=True)
         else:
             st.info("No active assignments")
     
@@ -356,13 +368,13 @@ def show_assignments():
             
             if details['assigned_pilots']:
                 st.subheader("Assigned Pilots")
-                st.dataframe(pd.DataFrame(details['assigned_pilots']), use_container_width=True)
+                st.dataframe(fix_df_for_display(pd.DataFrame(details['assigned_pilots'])), use_container_width=True)
             else:
                 st.info("No pilots assigned")
             
             if details['assigned_drones']:
                 st.subheader("Assigned Drones")
-                st.dataframe(pd.DataFrame(details['assigned_drones']), use_container_width=True)
+                st.dataframe(fix_df_for_display(pd.DataFrame(details['assigned_drones'])), use_container_width=True)
             else:
                 st.info("No drones assigned")
     
@@ -456,7 +468,7 @@ def show_conflicts():
         filtered = [c for c in st.session_state.conflict_detector.get_all_conflicts() if c['type'] == selected_type]
         
         if filtered:
-            st.dataframe(pd.DataFrame(filtered), use_container_width=True)
+            st.dataframe(fix_df_for_display(pd.DataFrame(filtered)), use_container_width=True)
         else:
             st.info(f"No {selected_type} conflicts")
     
