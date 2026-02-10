@@ -347,6 +347,7 @@ def show_assignments():
                 st.write(f"**Start**: {details['start_date']}")
                 st.write(f"**End**: {details['end_date']}")
                 st.write(f"**Required Skills**: {details['required_skills']}")
+                st.write(f"**Required Certifications**: {details['required_certs']}")
             
             st.divider()
             
