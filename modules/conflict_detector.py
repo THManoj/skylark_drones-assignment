@@ -218,18 +218,31 @@ class ConflictDetector:
                 # Check if any pilot assigned to this mission is on leave
                 assigned_pilots = pilots[pilots['current_assignment'] == mission['project_id']]
                 
-                for _, pilot in assigned_pilots.iterrows():
-                    if pilot['status'] == 'On Leave':
-                        conflicts.append({
-                            'type': 'Urgent Mission - Pilot On Leave',
-                            'severity': 'CRITICAL',
-                            'pilot_id': pilot['pilot_id'],
-                            'pilot_name': pilot['name'],
-                            'pilot_status': pilot['status'],
-                            'assignment': mission['project_id'],
-                            'priority': mission['priority'],
-                            'issue': f"URGENT: {pilot['name']} is On Leave but assigned to {mission['priority']} priority mission {mission['project_id']}"
-                        })
+                # Check if no pilot is assigned to urgent/high priority mission
+                if assigned_pilots.empty:
+                    conflicts.append({
+                        'type': 'Unassigned Urgent Mission',
+                        'severity': 'CRITICAL' if mission['priority'] == 'Urgent' else 'HIGH',
+                        'assignment': mission['project_id'],
+                        'client': mission.get('client', 'Unknown'),
+                        'priority': mission['priority'],
+                        'location': mission.get('location', 'Unknown'),
+                        'required_skills': mission.get('required_skills', ''),
+                        'issue': f"ATTENTION: {mission['priority']} priority mission {mission['project_id']} ({mission.get('client', 'Unknown')}) has NO pilot assigned!"
+                    })
+                else:
+                    for _, pilot in assigned_pilots.iterrows():
+                        if pilot['status'] == 'On Leave':
+                            conflicts.append({
+                                'type': 'Urgent Mission - Pilot On Leave',
+                                'severity': 'CRITICAL',
+                                'pilot_id': pilot['pilot_id'],
+                                'pilot_name': pilot['name'],
+                                'pilot_status': pilot['status'],
+                                'assignment': mission['project_id'],
+                                'priority': mission['priority'],
+                                'issue': f"URGENT: {pilot['name']} is On Leave but assigned to {mission['priority']} priority mission {mission['project_id']}"
+                            })
         
         return conflicts
     
@@ -296,8 +309,39 @@ class ConflictDetector:
         reassignments = []
         
         for conflict in urgent_conflicts:
-            if 'pilot_id' in conflict and 'assignment' in conflict:
-                mission_id = conflict['assignment']
+            mission_id = conflict.get('assignment')
+            
+            # Handle unassigned urgent missions
+            if conflict['type'] == 'Unassigned Urgent Mission':
+                replacement = self.find_best_replacement_pilot(mission_id)
+                
+                if replacement is not None:
+                    new_pilot_id = replacement['pilot_id']
+                    
+                    # Assign new pilot
+                    self.data_loader.update_pilot_status(new_pilot_id, 'Assigned', mission_id)
+                    
+                    reassignments.append({
+                        'conflict': conflict['issue'],
+                        'old_pilot': 'None (Unassigned)',
+                        'new_pilot': replacement['name'],
+                        'new_pilot_id': new_pilot_id,
+                        'mission': mission_id,
+                        'status': 'SUCCESS',
+                        'message': f"✅ Auto-assigned {mission_id}: {replacement['name']} (was unassigned)"
+                    })
+                else:
+                    reassignments.append({
+                        'conflict': conflict['issue'],
+                        'old_pilot': 'None',
+                        'new_pilot': None,
+                        'mission': mission_id,
+                        'status': 'FAILED',
+                        'message': f"❌ No suitable pilot found for {mission_id}"
+                    })
+            
+            # Handle conflicts with existing pilot assignments
+            elif 'pilot_id' in conflict and mission_id:
                 old_pilot_id = conflict['pilot_id']
                 
                 # Find replacement
