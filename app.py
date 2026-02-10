@@ -469,6 +469,34 @@ def show_conflicts():
         if critical_conflicts:
             st.warning(f"**{len(critical_conflicts)} critical issues require urgent attention**")
             
+            # AUTO-REASSIGN BUTTON
+            st.divider()
+            col1, col2 = st.columns([2, 1])
+            with col1:
+                st.write("**🤖 Automatic Reassignment**: Let the system find and assign best available pilots/drones")
+            with col2:
+                if st.button("⚡ Auto-Reassign All", type="primary"):
+                    results = st.session_state.conflict_detector.auto_reassign_urgent_conflicts(
+                        st.session_state.roster_manager
+                    )
+                    
+                    if results:
+                        st.session_state.data_loader.save_pilots()
+                        st.session_state.data_loader.save_missions()
+                        
+                        for r in results:
+                            if r['status'] == 'SUCCESS':
+                                st.success(r['message'])
+                            else:
+                                st.error(r['message'])
+                        
+                        st.rerun()
+                    else:
+                        st.info("No urgent conflicts to reassign")
+            
+            st.divider()
+            
+            # Show each conflict with details
             for conflict in critical_conflicts:
                 with st.expander(f"{conflict['type']}: {conflict['issue']}", expanded=False):
                     if 'pilot_id' in conflict:
@@ -477,11 +505,18 @@ def show_conflicts():
                         
                         st.write(f"**Current Assignment**: {current_mission}")
                         
-                        # Get available alternatives
+                        # Find best replacement
+                        best_replacement = st.session_state.conflict_detector.find_best_replacement_pilot(current_mission)
+                        if best_replacement is not None:
+                            st.write(f"**🎯 Recommended Replacement**: {best_replacement['name']} ({best_replacement['pilot_id']})")
+                            st.write(f"   - Skills: {best_replacement['skills']}")
+                            st.write(f"   - Certifications: {best_replacement['certifications']}")
+                        
+                        # Get all available alternatives
                         available_pilots = st.session_state.roster_manager.get_available_pilots()
                         if len(available_pilots) > 0:
-                            st.write("**Available Pilots to Reassign**:")
-                            st.dataframe(available_pilots[['pilot_id', 'name', 'skills', 'location']], use_container_width=True)
+                            st.write("**All Available Pilots**:")
+                            st.dataframe(available_pilots[['pilot_id', 'name', 'skills', 'certifications', 'location']], use_container_width=True)
                     
                     if 'drone_id' in conflict:
                         drone_id = conflict['drone_id']

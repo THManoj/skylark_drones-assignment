@@ -219,3 +219,90 @@ class ConflictDetector:
         }
         
         return summary
+    
+    def find_best_replacement_pilot(self, mission_id):
+        """Find the best available pilot for a mission"""
+        mission = self.data_loader.get_mission_by_id(mission_id)
+        if mission is None:
+            return None
+        
+        pilots = self.data_loader.get_pilots()
+        available_pilots = pilots[pilots['status'] == 'Available']
+        
+        # Filter by location
+        location_match = available_pilots[available_pilots['location'] == mission['location']]
+        
+        if location_match.empty:
+            return None
+        
+        required_skills = [s.strip().lower() for s in str(mission['required_skills']).split(',')]
+        required_certs = [c.strip().lower() for c in str(mission['required_certs']).split(',')]
+        
+        best_pilot = None
+        best_score = -1
+        
+        for idx, pilot in location_match.iterrows():
+            pilot_skills = [s.strip().lower() for s in str(pilot['skills']).split(',')]
+            pilot_certs = [c.strip().lower() for c in str(pilot['certifications']).split(',')]
+            
+            # Calculate match score
+            skill_matches = sum(1 for s in required_skills if s in pilot_skills)
+            cert_matches = sum(1 for c in required_certs if c in pilot_certs)
+            
+            # Require at least base DGCA certification
+            if 'dgca' not in pilot_certs:
+                continue
+            
+            score = skill_matches * 2 + cert_matches  # Skills weighted higher
+            
+            if score > best_score:
+                best_score = score
+                best_pilot = pilot
+        
+        return best_pilot
+    
+    def auto_reassign_urgent_conflicts(self, roster_manager):
+        """Automatically reassign for CRITICAL and HIGH severity conflicts"""
+        conflicts = self.get_all_conflicts()
+        urgent_conflicts = [c for c in conflicts if c['severity'] in ['CRITICAL', 'HIGH']]
+        
+        reassignments = []
+        
+        for conflict in urgent_conflicts:
+            if 'pilot_id' in conflict and 'assignment' in conflict:
+                mission_id = conflict['assignment']
+                old_pilot_id = conflict['pilot_id']
+                
+                # Find replacement
+                replacement = self.find_best_replacement_pilot(mission_id)
+                
+                if replacement is not None:
+                    # Perform reassignment
+                    new_pilot_id = replacement['pilot_id']
+                    
+                    # Clear old pilot assignment
+                    self.data_loader.update_pilot_status(old_pilot_id, conflict.get('pilot_status', 'On Leave'), '–')
+                    
+                    # Assign new pilot
+                    self.data_loader.update_pilot_status(new_pilot_id, 'Assigned', mission_id)
+                    
+                    reassignments.append({
+                        'conflict': conflict['issue'],
+                        'old_pilot': conflict.get('pilot_name', old_pilot_id),
+                        'new_pilot': replacement['name'],
+                        'new_pilot_id': new_pilot_id,
+                        'mission': mission_id,
+                        'status': 'SUCCESS',
+                        'message': f"✅ Auto-reassigned {mission_id}: {conflict.get('pilot_name', old_pilot_id)} → {replacement['name']}"
+                    })
+                else:
+                    reassignments.append({
+                        'conflict': conflict['issue'],
+                        'old_pilot': conflict.get('pilot_name', old_pilot_id),
+                        'new_pilot': None,
+                        'mission': mission_id,
+                        'status': 'FAILED',
+                        'message': f"❌ No suitable replacement found for {mission_id}"
+                    })
+        
+        return reassignments
