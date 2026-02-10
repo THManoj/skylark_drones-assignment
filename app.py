@@ -210,7 +210,10 @@ def show_roster():
                 if result['success']:
                     st.session_state.data_loader.save_pilots()
                     st.session_state.data_loader.save_missions()
-                    st.success(result['message'])
+                    if result.get('warning'):
+                        st.warning(result['message'])
+                    else:
+                        st.success(result['message'])
                 else:
                     st.error(result['message'])
         

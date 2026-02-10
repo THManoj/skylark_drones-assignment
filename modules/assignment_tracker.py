@@ -77,7 +77,7 @@ class AssignmentTracker:
         if pilot['status'] != 'Available':
             return {'success': False, 'message': f"❌ Pilot {pilot['name']} is {pilot['status']} - cannot assign"}
         
-        # Check location match
+        # Check location match - BLOCK (Critical)
         if pilot['location'] != mission['location']:
             return {
                 'success': False, 
@@ -88,24 +88,37 @@ class AssignmentTracker:
         required_skills = [s.strip() for s in str(mission['required_skills']).split(',')]
         pilot_skills = [s.strip() for s in str(pilot['skills']).split(',')]
         missing_skills = [s for s in required_skills if s not in pilot_skills]
-        if missing_skills:
+        
+        warning_message = None
+        
+        if len(missing_skills) > 1:
+            # Multiple skills missing - BLOCK
             return {
                 'success': False,
-                'message': f"❌ Skill mismatch: Pilot lacks required skills: {', '.join(missing_skills)}"
+                'message': f"❌ Skill mismatch: Pilot lacks multiple required skills: {', '.join(missing_skills)}"
             }
+        elif len(missing_skills) == 1:
+            # One skill missing - ALLOW with WARNING
+            warning_message = f"⚠️ CAUTION: Pilot lacks skill '{missing_skills[0]}' - proceeding with assignment"
         
-        # Check certifications match
+        # Check certifications match - BLOCK (Certifications are mandatory)
         required_certs = [c.strip() for c in str(mission['required_certs']).split(',')]
         pilot_certs = [c.strip() for c in str(pilot['certifications']).split(',')]
         missing_certs = [c for c in required_certs if c not in pilot_certs]
         if missing_certs:
             return {
                 'success': False,
-                'message': f"❌ Certification mismatch: Pilot lacks: {', '.join(missing_certs)}"
+                'message': f"❌ Certification mismatch: Pilot lacks: {', '.join(missing_certs)} (certifications are mandatory)"
             }
         
-        # All validations passed - Update assignment
+        # All critical validations passed - Update assignment
         result = self.roster_manager.update_pilot_assignment(pilot_id, project_id, 'Assigned')
+        
+        # Add warning to success message if there was a skill concern
+        if result['success'] and warning_message:
+            result['message'] = f"{warning_message}\n\n✅ {result['message']}"
+            result['warning'] = True
+        
         return result
     
     def assign_drone_to_mission(self, drone_id, project_id):
