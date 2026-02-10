@@ -18,11 +18,8 @@ def fix_df_for_display(df):
     """Convert datetime columns to strings for Streamlit display"""
     df = df.copy()
     for col in df.columns:
-        if df[col].dtype == 'datetime64[ns]' or 'date' in col.lower():
-            try:
-                df[col] = df[col].astype(str)
-            except:
-                pass
+        # Convert each cell individually to handle mixed types
+        df[col] = df[col].apply(lambda x: str(x) if hasattr(x, 'strftime') or 'date' in str(type(x)).lower() else x)
     return df
 
 # Page configuration
