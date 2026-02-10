@@ -77,19 +77,19 @@ class AssignmentTracker:
         if pilot['status'] != 'Available':
             return {'success': False, 'message': f"❌ Pilot {pilot['name']} is {pilot['status']} - cannot assign"}
         
-        # Check location match - BLOCK (Critical)
-        if pilot['location'] != mission['location']:
+        # Check location match - BLOCK (Critical - always required)
+        if pilot['location'].strip() != mission['location'].strip():
             return {
                 'success': False, 
                 'message': f"❌ Location mismatch: Pilot is in {pilot['location']}, but mission is in {mission['location']}"
             }
         
-        # Check skills match
-        required_skills = [s.strip() for s in str(mission['required_skills']).split(',')]
-        pilot_skills = [s.strip() for s in str(pilot['skills']).split(',')]
-        missing_skills = [s for s in required_skills if s not in pilot_skills]
+        warnings = []
         
-        warning_message = None
+        # Check skills match (case-insensitive)
+        required_skills = [s.strip().lower() for s in str(mission['required_skills']).split(',')]
+        pilot_skills = [s.strip().lower() for s in str(pilot['skills']).split(',')]
+        missing_skills = [s for s in required_skills if s not in pilot_skills]
         
         if len(missing_skills) > 1:
             # Multiple skills missing - BLOCK
@@ -99,24 +99,30 @@ class AssignmentTracker:
             }
         elif len(missing_skills) == 1:
             # One skill missing - ALLOW with WARNING
-            warning_message = f"⚠️ CAUTION: Pilot lacks skill '{missing_skills[0]}' - proceeding with assignment"
+            warnings.append(f"⚠️ Pilot lacks skill: '{missing_skills[0]}'")
         
-        # Check certifications match - BLOCK (Certifications are mandatory)
-        required_certs = [c.strip() for c in str(mission['required_certs']).split(',')]
-        pilot_certs = [c.strip() for c in str(pilot['certifications']).split(',')]
+        # Check certifications match (case-insensitive)
+        required_certs = [c.strip().lower() for c in str(mission['required_certs']).split(',')]
+        pilot_certs = [c.strip().lower() for c in str(pilot['certifications']).split(',')]
         missing_certs = [c for c in required_certs if c not in pilot_certs]
-        if missing_certs:
+        
+        if len(missing_certs) > 1:
+            # Multiple certs missing - BLOCK
             return {
                 'success': False,
-                'message': f"❌ Certification mismatch: Pilot lacks: {', '.join(missing_certs)} (certifications are mandatory)"
+                'message': f"❌ Certification mismatch: Pilot lacks multiple certifications: {', '.join(missing_certs)}"
             }
+        elif len(missing_certs) == 1:
+            # One cert missing - ALLOW with WARNING
+            warnings.append(f"⚠️ Pilot lacks certification: '{missing_certs[0]}'")
         
         # All critical validations passed - Update assignment
         result = self.roster_manager.update_pilot_assignment(pilot_id, project_id, 'Assigned')
         
-        # Add warning to success message if there was a skill concern
-        if result['success'] and warning_message:
-            result['message'] = f"{warning_message}\n\n✅ {result['message']}"
+        # Add warnings to success message
+        if result['success'] and warnings:
+            warning_text = "\n".join(warnings)
+            result['message'] = f"{warning_text}\n\n✅ {result['message']} (assigned with caution)"
             result['warning'] = True
         
         return result
