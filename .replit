@@ -1,8 +1,16 @@
-run = "streamlit run app.py"
-modules = ["python-3.10"]
+run = "streamlit run app.py --server.port 5000 --server.address 0.0.0.0"
+modules = ["python-3.11"]
 
 [nix]
-channel = "stable-23_11"
+channel = "stable-24_05"
+
+[deployment]
+run = ["sh", "-c", "streamlit run app.py --server.port 5000 --server.address 0.0.0.0"]
+deploymentTarget = "cloudrun"
+
+[[ports]]
+localPort = 5000
+externalPort = 80
 
 [unitTest]
 language = "python3"
