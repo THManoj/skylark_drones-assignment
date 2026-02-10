@@ -7,6 +7,9 @@ __pycache__/
 .venv/
 venv/
 
+# Secrets - NEVER commit
+.streamlit/secrets.toml
+
 # Exclude markdown files and notes
 *.md
 important.txt
