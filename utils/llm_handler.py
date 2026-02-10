@@ -1,10 +1,20 @@
 import os
 
+def get_groq_api_key():
+    """Get Groq API key from Streamlit secrets or environment"""
+    try:
+        import streamlit as st
+        if hasattr(st, 'secrets') and 'GROQ_API_KEY' in st.secrets:
+            return st.secrets['GROQ_API_KEY']
+    except:
+        pass
+    return os.getenv('GROQ_API_KEY')
+
 class LLMHandler:
     """Handle conversational interface with Groq LLM"""
     
     def __init__(self, api_key=None):
-        self.api_key = api_key or os.getenv('GROQ_API_KEY')
+        self.api_key = api_key or get_groq_api_key()
         self.client = None
         self.conversation_history = []
         

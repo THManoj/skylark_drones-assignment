@@ -31,10 +31,31 @@ st.set_page_config(
 )
 
 # ============ DEPLOYMENT MODE DETECTION ============
-# Set USE_GOOGLE_SHEETS=true in Replit Secrets to use Google Sheets as backend
-USE_GOOGLE_SHEETS = os.environ.get('USE_GOOGLE_SHEETS', 'false').lower() == 'true'
-GOOGLE_SHEETS_CREDS = os.environ.get('GOOGLE_SHEETS_CREDENTIALS', '')
-SPREADSHEET_ID = os.environ.get('GOOGLE_SPREADSHEET_ID', '')
+# Check for Streamlit Cloud secrets first, then environment variables
+def get_secret(key, default=''):
+    """Get secret from Streamlit secrets or environment variables"""
+    try:
+        # Try Streamlit secrets first (for Streamlit Cloud)
+        if hasattr(st, 'secrets') and key in st.secrets:
+            return st.secrets[key]
+    except:
+        pass
+    # Fall back to environment variables
+    return os.environ.get(key, default)
+
+def get_gcp_credentials():
+    """Get GCP service account credentials from Streamlit secrets"""
+    try:
+        if hasattr(st, 'secrets') and 'gcp_service_account' in st.secrets:
+            import json
+            return json.dumps(dict(st.secrets['gcp_service_account']))
+    except:
+        pass
+    return os.environ.get('GOOGLE_SHEETS_CREDENTIALS', '')
+
+USE_GOOGLE_SHEETS = get_secret('USE_GOOGLE_SHEETS', 'false').lower() == 'true'
+GOOGLE_SHEETS_CREDS = get_gcp_credentials()
+SPREADSHEET_ID = get_secret('GOOGLE_SHEETS_ID', '')
 
 # Initialize session state
 if 'data_loader' not in st.session_state:
