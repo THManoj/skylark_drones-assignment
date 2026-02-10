@@ -66,7 +66,7 @@ class AssignmentTracker:
         }
     
     def assign_pilot_to_mission(self, pilot_id, project_id):
-        """Assign pilot to a mission"""
+        """Assign pilot to a mission with validation"""
         pilot = self.data_loader.get_pilot_by_id(pilot_id)
         mission = self.data_loader.get_mission_by_id(project_id)
         
@@ -75,14 +75,41 @@ class AssignmentTracker:
         
         # Check availability
         if pilot['status'] != 'Available':
-            return {'success': False, 'message': f"Pilot {pilot_id} is {pilot['status']}"}
+            return {'success': False, 'message': f"❌ Pilot {pilot['name']} is {pilot['status']} - cannot assign"}
         
-        # Update assignment
+        # Check location match
+        if pilot['location'] != mission['location']:
+            return {
+                'success': False, 
+                'message': f"❌ Location mismatch: Pilot is in {pilot['location']}, but mission is in {mission['location']}"
+            }
+        
+        # Check skills match
+        required_skills = [s.strip() for s in str(mission['required_skills']).split(',')]
+        pilot_skills = [s.strip() for s in str(pilot['skills']).split(',')]
+        missing_skills = [s for s in required_skills if s not in pilot_skills]
+        if missing_skills:
+            return {
+                'success': False,
+                'message': f"❌ Skill mismatch: Pilot lacks required skills: {', '.join(missing_skills)}"
+            }
+        
+        # Check certifications match
+        required_certs = [c.strip() for c in str(mission['required_certs']).split(',')]
+        pilot_certs = [c.strip() for c in str(pilot['certifications']).split(',')]
+        missing_certs = [c for c in required_certs if c not in pilot_certs]
+        if missing_certs:
+            return {
+                'success': False,
+                'message': f"❌ Certification mismatch: Pilot lacks: {', '.join(missing_certs)}"
+            }
+        
+        # All validations passed - Update assignment
         result = self.roster_manager.update_pilot_assignment(pilot_id, project_id, 'Assigned')
         return result
     
     def assign_drone_to_mission(self, drone_id, project_id):
-        """Assign drone to a mission"""
+        """Assign drone to a mission with validation"""
         drone = self.data_loader.get_drone_by_id(drone_id)
         mission = self.data_loader.get_mission_by_id(project_id)
         
@@ -91,19 +118,72 @@ class AssignmentTracker:
         
         # Check availability
         if drone['status'] != 'Available':
-            return {'success': False, 'message': f"Drone {drone_id} is {drone['status']}"}
+            return {'success': False, 'message': f"❌ Drone {drone_id} is {drone['status']} - cannot deploy"}
         
-        # Update assignment
+        # Check location match
+        if drone['location'] != mission['location']:
+            return {
+                'success': False,
+                'message': f"❌ Location mismatch: Drone is in {drone['location']}, but mission is in {mission['location']}"
+            }
+        
+        # Check if drone capabilities match required skills (if applicable)
+        required_skills = [s.strip().lower() for s in str(mission['required_skills']).split(',')]
+        drone_capabilities = [c.strip().lower() for c in str(drone['capabilities']).split(',')]
+        
+        # Check for thermal/lidar requirements
+        if 'thermal' in required_skills and 'thermal' not in drone_capabilities:
+            return {
+                'success': False,
+                'message': f"❌ Capability mismatch: Mission requires Thermal but drone only has {drone['capabilities']}"
+            }
+        
+        # Check maintenance due date
+        import pandas as pd
+        if pd.to_datetime(drone['maintenance_due']) <= pd.to_datetime(mission['end_date']):
+            return {
+                'success': False,
+                'message': f"❌ Drone maintenance due on {drone['maintenance_due']} before mission ends on {mission['end_date']}"
+            }
+        
+        # All validations passed - Update assignment
         result = self.drone_inventory.assign_drone(drone_id, project_id)
         return result
     
     def reassign_pilot(self, pilot_id, new_project_id):
-        """Reassign pilot from current project to new project"""
+        """Reassign pilot from current project to new project with validation"""
         pilot = self.data_loader.get_pilot_by_id(pilot_id)
         new_mission = self.data_loader.get_mission_by_id(new_project_id)
         
         if pilot is None or new_mission is None:
             return {'success': False, 'message': 'Pilot or Mission not found'}
+        
+        # Check location match
+        if pilot['location'] != new_mission['location']:
+            return {
+                'success': False,
+                'message': f"❌ Location mismatch: Pilot is in {pilot['location']}, but mission is in {new_mission['location']}"
+            }
+        
+        # Check skills match
+        required_skills = [s.strip() for s in str(new_mission['required_skills']).split(',')]
+        pilot_skills = [s.strip() for s in str(pilot['skills']).split(',')]
+        missing_skills = [s for s in required_skills if s not in pilot_skills]
+        if missing_skills:
+            return {
+                'success': False,
+                'message': f"❌ Skill mismatch: Pilot lacks required skills: {', '.join(missing_skills)}"
+            }
+        
+        # Check certifications match
+        required_certs = [c.strip() for c in str(new_mission['required_certs']).split(',')]
+        pilot_certs = [c.strip() for c in str(pilot['certifications']).split(',')]
+        missing_certs = [c for c in required_certs if c not in pilot_certs]
+        if missing_certs:
+            return {
+                'success': False,
+                'message': f"❌ Certification mismatch: Pilot lacks: {', '.join(missing_certs)}"
+            }
         
         old_assignment = pilot['current_assignment']
         
@@ -113,19 +193,34 @@ class AssignmentTracker:
         if result['success']:
             return {
                 'success': True,
-                'message': f'Pilot reassigned from {old_assignment} to {new_project_id}',
+                'message': f'✅ Pilot reassigned from {old_assignment} to {new_project_id}',
                 'old_assignment': old_assignment,
                 'new_assignment': new_project_id
             }
         return result
     
     def reassign_drone(self, drone_id, new_project_id):
-        """Reassign drone to new project"""
+        """Reassign drone to new project with validation"""
         drone = self.data_loader.get_drone_by_id(drone_id)
         new_mission = self.data_loader.get_mission_by_id(new_project_id)
         
         if drone is None or new_mission is None:
             return {'success': False, 'message': 'Drone or Mission not found'}
+        
+        # Check location match
+        if drone['location'] != new_mission['location']:
+            return {
+                'success': False,
+                'message': f"❌ Location mismatch: Drone is in {drone['location']}, but mission is in {new_mission['location']}"
+            }
+        
+        # Check maintenance due date
+        import pandas as pd
+        if pd.to_datetime(drone['maintenance_due']) <= pd.to_datetime(new_mission['end_date']):
+            return {
+                'success': False,
+                'message': f"❌ Drone maintenance due on {drone['maintenance_due']} before mission ends"
+            }
         
         old_assignment = drone['current_assignment']
         
@@ -135,7 +230,7 @@ class AssignmentTracker:
         if result['success']:
             return {
                 'success': True,
-                'message': f'Drone reassigned from {old_assignment} to {new_project_id}',
+                'message': f'✅ Drone reassigned from {old_assignment} to {new_project_id}',
                 'old_assignment': old_assignment,
                 'new_assignment': new_project_id
             }
