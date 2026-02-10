@@ -3,15 +3,32 @@ import pandas as pd
 from datetime import datetime, timedelta
 import os
 
-# Import custom modules
-from modules.data_loader import DataLoader
-from modules.cloud_data_loader import CloudDataLoader
-from modules.roster_manager import RosterManager
-from modules.drone_inventory import DroneInventory
-from modules.assignment_tracker import AssignmentTracker
-from modules.conflict_detector import ConflictDetector
-from utils.llm_handler import LLMHandler
-from utils.sheets_sync import GoogleSheetsSync
+# Debug: Print to verify app starts
+print("=== APP STARTING ===")
+
+try:
+    # Import custom modules
+    from modules.data_loader import DataLoader
+    print("DataLoader imported")
+    from modules.cloud_data_loader import CloudDataLoader
+    print("CloudDataLoader imported")
+    from modules.roster_manager import RosterManager
+    print("RosterManager imported")
+    from modules.drone_inventory import DroneInventory
+    print("DroneInventory imported")
+    from modules.assignment_tracker import AssignmentTracker
+    print("AssignmentTracker imported")
+    from modules.conflict_detector import ConflictDetector
+    print("ConflictDetector imported")
+    from utils.llm_handler import LLMHandler
+    print("LLMHandler imported")
+    from utils.sheets_sync import GoogleSheetsSync
+    print("GoogleSheetsSync imported")
+    print("=== ALL IMPORTS SUCCESSFUL ===")
+except Exception as e:
+    print(f"=== IMPORT ERROR: {e} ===")
+    st.error(f"Import error: {e}")
+    raise e
 
 # Helper function to fix datetime columns for display
 def fix_df_for_display(df):
